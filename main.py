@@ -1,103 +1,79 @@
-import en_core_web_sm
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from models.resume import Resume
-from models.cover_letter import CoverLetter
-from spacy.matcher import Matcher
-from models.api_inputs import RawResume, HighlightInput, RawCoverLetter
+from kivy.app import App
+from kivy.uix.widget import Widget
+from kivy.core.window import Window
+from kivy.lang.builder import Builder
+import re
 
-# local run command:
-# uvicorn main:app --reload
+Builder.load_file('./calculator.kv')
+Window.size = (350, 550)
 
-# set up app and CORS middleware
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET", "POST"]
-)
+class CalculatorWidget(Widget):
+    # Clear the screen
+    def clear(self):
+        self.ids.input_box.text = "0"
 
-# load yake extractor
-yake_extractor = Resume.load_yake_extractor()
+    # Remove the last character
+    def remove_last(self):
+        prev_number = self.ids.input_box.text
+        prev_number = prev_number[:-1]
+        self.ids.input_box.text = prev_number
 
-# load spacy matcher
-spacy_model = en_core_web_sm.load()
-matcher = Matcher(spacy_model.vocab)
+    # Getting the button value
+    def button_value(self, number):
+        prev_number = self.ids.input_box.text
 
+        if "wrong equation" in prev_number:
+            prev_number = ''
 
-@app.post("/get_resume_feedback")
-def get_resume_feedback(raw_resume: RawResume) -> dict:
-    """
-    Instantiates new resume, searches for keywords in job_description with Yake,
-    compare resume and job description with spacy, return keywords found, missing keywords,
-    and resume line by line feedback.
-    :param raw_resume: json with job_title, job_description, job_company, and raw_resume
-    :return: dict of results (check resume_lines_feedback for line by line feedback)
-    """
-    # TODO add a new endpoint so that input str and input list preprocessing don't have to be handled confusingly
-    resume = Resume(
-        job_title=raw_resume.job_title,
-        job_description=raw_resume.job_description,
-        job_company=raw_resume.job_company,
-        raw_resume=raw_resume.raw_resume,
-    )
-    all_keywords, all_skills = resume.extract_all_job_keywords(yake_extractor=yake_extractor)
-    included_keywords, missing_keywords = resume.extract_included_and_missing_keywords(
-        matcher=matcher, spacy_model=spacy_model
-    )
+        if prev_number == '0':
+            self.ids.input_box.text = ''
+            self.ids.input_box.text = f"{number}"
 
-    resume_lines_feedback = resume.get_resume_feedback()
-    resume_keyword_score = resume.get_resume_keyword_score()
-    
-    # combine results into one dict
-    resume_feedback = {
-        "job_title": raw_resume.job_title,
-        "all_keywords": all_keywords,
-        "skills": all_skills,
-        "included_keywords": included_keywords,
-        "missing_keywords": missing_keywords,
-        "keyword_score": resume_keyword_score,
-        "resume_lines_feedback": resume_lines_feedback,
-    }
+        else:
+            self.ids.input_box.text = f"{prev_number}{number}"
 
-    return resume_feedback
+    # Getting the sings
+    def sings(self, sing):
+        prev_number = self.ids.input_box.text
+        self.ids.input_box.text = f"{prev_number}{sing}"
 
+    # Getting decimal value
+    def dot(self):
+        prev_number = self.ids.input_box.text
+        num_list = re.split("\+|\*|-|/|%", prev_number)
 
-@app.post("/highlighted_job_description")
-def get_highlighted_job_description(highlight_input: HighlightInput):
-    """
-    Making use of the yake TextHighlighter feature to return a job description string that has keywords bolded
-    :param highlight_input: job_description as a string and job_keywords as a list
-    :return: job_description as a string with highlighted keywords in bold
-    """
-    highlighted_job_description = Resume.get_highlighted_keywords_in_job_description(
-        job_description=highlight_input.job_description,
-        job_keywords=highlight_input.job_keywords,
-    )
+        if ("+" in prev_number or "-" in prev_number or "*" in prev_number or "/" in prev_number or "%" in prev_number) and "." not in num_list[-1]:
+            prev_number = f"{prev_number}."
+            self.ids.input_box.text = prev_number
 
-    return highlighted_job_description
+        elif '.' in prev_number:
+            pass
+
+        else:
+            prev_number = f'{prev_number}.'
+            self.ids.input_box.text = prev_number
+
+    # Calculate the result
+    def results(self):
+        prev_number = self.ids.input_box.text
+        try:
+            result = eval(prev_number)
+            self.ids.input_box.text = str(result)
+        except:
+            self.ids.input_box.text = "wrong equation"
+
+    # Positive to negative
+    def positive_negative(self):
+        prev_number = self.ids.input_box.text
+        if "-" in prev_number:
+            self.ids.input_box.text = f"{prev_number.replace('-', '')}"
+        else:
+            self.ids.input_box.text = f"-{prev_number}"
 
 
-# @app.post("/generate_cover_letter")
-# def generate_cover_letter(raw_cover_letter: RawCoverLetter):
-#     # TODO https://fastapi.tiangolo.com/tutorial/request-files/
-#     cover_letter = CoverLetter(
-#         input_cover_letter=raw_cover_letter.cover_letter_docx,
-#         first_name=raw_cover_letter.first_name,
-#         last_name=raw_cover_letter.last_name,
-#         job_title=raw_cover_letter.job_title,
-#         job_company=raw_cover_letter.job_company
-#     )
-#
-#     # generate and return cover letter (and delete after returning)
-#     cover_letter_file_name = cover_letter.generate_final_cover_letter()
-#
-#     return FileResponse(cover_letter_file_name)
+class CalculatorApp(App):
+    def build(self):
+        return CalculatorWidget()
 
-
-@app.get("/")
-def home():
-    return {
-        "msg": "hello there check out the docs if you're lost just add /docs to your current URL"
-    }
+if __name__ == "__main__":
+    CalculatorApp().run()
